@@ -39,6 +39,9 @@ def daemon_exec(config):
         log_file = config['log-file']
         if command == 'start':
             daemon_start(pid_file, log_file)
+        elif command == 'status':
+            check_status(pid_file)
+            sys.exit(0)
         elif command == 'stop':
             daemon_stop(pid_file)
             # always exit after daemon_stop
@@ -47,9 +50,42 @@ def daemon_exec(config):
             daemon_stop(pid_file)
             daemon_start(pid_file, log_file)
         else:
-            raise Exception('unsupported daemon command %s' % command)
+            raise Exception('unsupported daemon111 command %s' % command)
 
+def check_status(pid_file):
+    import fcntl
+    import stat
 
+    try:
+        fd = os.open(pid_file, os.O_RDWR | os.O_CREAT,
+                     stat.S_IRUSR | stat.S_IWUSR)
+    except OSError as e:
+        shell.print_exception(e)
+        return -1
+    flags = fcntl.fcntl(fd, fcntl.F_GETFD)
+    assert flags != -1
+	#file descriptor closed while running
+    flags |= fcntl.FD_CLOEXEC
+    r = fcntl.fcntl(fd, fcntl.F_SETFD, flags)
+    assert r != -1
+    # There is no platform independent way to implement fcntl(fd, F_SETLK, &fl)
+    # via fcntl.fcntl. So use lockf instead
+    running=False;
+    try:
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 0, 0, os.SEEK_SET)
+    except IOError:
+        running=True;
+        r = os.read(fd, 32)
+        if r:
+            print('already started at pid %s' % common.to_str(r))
+        else:
+            print('already started')
+        os.close(fd)
+        return -1
+    if running is False:
+        print('not running')
+    return 0
+	
 def write_pid_file(pid_file, pid):
     import fcntl
     import stat
@@ -62,6 +98,7 @@ def write_pid_file(pid_file, pid):
         return -1
     flags = fcntl.fcntl(fd, fcntl.F_GETFD)
     assert flags != -1
+	#file descriptor closed while running
     flags |= fcntl.FD_CLOEXEC
     r = fcntl.fcntl(fd, fcntl.F_SETFD, flags)
     assert r != -1
@@ -117,6 +154,7 @@ def daemon_start(pid_file, log_file):
         sys.exit(1)
 
     os.setsid()
+	#ignore user logoff signal
     signal.signal(signal.SIG_IGN, signal.SIGHUP)
 
     print('started')

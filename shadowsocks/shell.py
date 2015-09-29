@@ -78,6 +78,10 @@ def check_config(config, is_local):
         # no need to specify configuration for daemon stop
         return
 
+    if config.get('daemon', None) == 'status':
+        # no need to specify configuration for daemon stop
+        return
+
     if is_local and not config.get('password', None):
         logging.error('password not specified')
         print_help(is_local)
